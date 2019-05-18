@@ -1,4 +1,6 @@
 import os
+import sys
+import getopt
 import platform
 import requests
 import datetime
@@ -15,6 +17,7 @@ def download(url):
     # print download_path
     os.mkdir(download_path)
 
+    print(f"开始下载视频，链接为:\n{url}")
     all_content = requests.get(url).text  # 获取第一层M3U8文件内容
     if "#EXTM3U" not in all_content:
         raise BaseException("非M3U8的链接")
@@ -88,5 +91,8 @@ def merge_file(path):
 
 
 if __name__ == '__main__':
-    url = "https://cdn-5.haku99.com/hls/2019/05/06/3KAA7v3y/playlist.m3u8"
+    opts, args = getopt.getopt(sys.argv[1:], "u:")
+    url = "http://jx.kqk8.com/ce707512-8b1b-4902-86e3-aaa4f8b7be6a"
+    if opts:
+        url = opts[0][1]
     download(url)
