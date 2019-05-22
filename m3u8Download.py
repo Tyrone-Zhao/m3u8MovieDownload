@@ -5,6 +5,7 @@ import platform
 import requests
 from Crypto.Cipher import AES
 from pathlib import Path
+from tqdm import tqdm
 
 
 def download(url):
@@ -92,7 +93,8 @@ def breakpointContinuingly(download_path, file_line, url):
         unknow = True
         begin = True
         key = ""
-        for index, line in enumerate(file_line):  # 第二层
+        for index in tqdm(range(len(file_line))):  # 第二层
+            line = file_line[index]
             if "#EXT-X-KEY" in line:  # 找解密Key
                 method_pos = line.find("METHOD")
                 comma_pos = line.find(",")
@@ -116,7 +118,7 @@ def breakpointContinuingly(download_path, file_line, url):
 
                 unknow = False
                 pd_url = url.rsplit("/", 1)[0] + "/" + file_line[index + 1]  # 拼出ts片段的URL
-                print(pd_url)
+                # print(pd_url, f"    {index / len(file_line):.0%}")
 
                 res = requests.get(pd_url)
                 c_fule_name = file_line[index + 1].rsplit("/", 1)[-1]
