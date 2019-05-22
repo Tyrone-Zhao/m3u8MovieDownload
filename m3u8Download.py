@@ -86,9 +86,20 @@ def breakpointContinuingly(download_path, file_line, url):
         pass
 
     if temp:
-        temp.sort()
-        filepath, tempfilename = os.path.split(temp[-1])
-        filename, extension = os.path.splitext(tempfilename)
+        biggest_filename = ""
+        max_num = 0
+        for t in temp:
+            filepath, tempfilename = os.path.split(t)
+            filename, extension = os.path.splitext(tempfilename)
+            num = ""
+            for f in filename:
+                if f.isdigit():
+                    num += f
+            if int(num) > max_num:
+                max_num = int(num)
+                biggest_filename = tempfilename
+
+        print(f"从文件{biggest_filename}开始断点续传。")
 
         unknow = True
         begin = True
@@ -111,7 +122,7 @@ def breakpointContinuingly(download_path, file_line, url):
                 print("key：", key)
 
             if "EXTINF" in line:  # 找ts地址并下载
-                if begin and tempfilename not in file_line[index + 1]:
+                if begin and biggest_filename not in file_line[index + 1]:
                     continue
                 else:
                     begin = False
@@ -165,4 +176,14 @@ if __name__ == '__main__':
     url = "http://jx.kqk8.com/ce707512-8b1b-4902-86e3-aaa4f8b7be6a"
     if opts:
         url = opts[0][1]
-    download(url)
+    url = url.replace("https", "http")
+    while True:
+        try:
+            download(url)
+        except Exception:
+            download(url)
+        finally:
+            break
+
+
+# 下一步开发计划，下载指定的ts文件列表
