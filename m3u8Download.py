@@ -3,7 +3,6 @@ import sys
 import getopt
 import platform
 import requests
-import datetime
 from Crypto.Cipher import AES
 from pathlib import Path
 
@@ -87,10 +86,8 @@ def breakpointContinuingly(download_path, file_line, url):
 
     if temp:
         temp.sort()
-        print(temp)
         filepath, tempfilename = os.path.split(temp[-1])
         filename, extension = os.path.splitext(tempfilename)
-        print(tempfilename)
 
         unknow = True
         begin = True
@@ -115,7 +112,6 @@ def breakpointContinuingly(download_path, file_line, url):
                 if begin and tempfilename not in file_line[index + 1]:
                     continue
                 else:
-                    print("开始断点续传！")
                     begin = False
 
                 unknow = False
