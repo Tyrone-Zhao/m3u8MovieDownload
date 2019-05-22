@@ -272,10 +272,6 @@ if __name__ == '__main__':
         while True:
             try:
                 download(url)
-            except Exception:
-                download(url)
-            finally:
                 break
-
-
-# 下一步开发计划，下载指定的ts文件列表
+            except Exception:
+                continue
