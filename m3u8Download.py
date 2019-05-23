@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import time
 import numpy
@@ -88,6 +89,8 @@ def getFileLine(url):
 
     file_line = all_content.split("\n")
 
+    http = r'((http|ftp|https)://(([a-zA-Z0-9\._-]+\.[a-zA-Z]{2,6})|([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})))'
+    url_head = re.findall(http, "https://v2.bajiebofang.com/ppvod/8071A2CEA071459EDD41F82F1317DB04.m3u8")[0][0]
     res = OrderedDict()
     key = ""
     for index in range(len(file_line)):  # 第二层
@@ -111,7 +114,7 @@ def getFileLine(url):
             if "http" in file_line[index + 1]:
                 pd_url = file_line[index + 1]
             else:
-                pd_url = url.rsplit("/", 1)[0] + "/" + file_line[index + 1]  # 拼出ts片段的URL
+                pd_url = url_head + "/" + file_line[index + 1]  # 拼出ts片段的URL
 
             c_fule_name = file_line[index + 1].rsplit("/", 1)[-1]
             res[c_fule_name] = pd_url
@@ -133,7 +136,6 @@ async def downloadM3u8(line):
         else:
             with open(os.path.join(download_path, c_fule_name), 'ab') as f:
                 f.write(res.content)
-                f.flush()
     except Exception:
         print(f"{line}下载失败")
         os.chdir(download_path)
@@ -149,17 +151,23 @@ def merge_file(path):
     os.chdir(path)
     plat_f = platform.system()
     if "Win" in plat_f:
-        cmd = "copy /b * new.tmp"
+        str1 = ""
+        for s in checkDownloadFolder(path):
+            str1 += s + " "
+        cmd = f"copy /b {str1} new.tmp"
         os.system(cmd)
         os.system('del /Q *.ts')
         os.system('del /Q *.mp4')
         os.rename("new.tmp", "new.mp4")
     elif "Dar" in plat_f:
-        cmd = "cat *.ts > new.ts"
+        str1 = ""
+        for s in checkDownloadFolder(path):
+            str1 += s + " "
+        cmd = f'cat {str1} > new.mp4'
         os.system(cmd)
-        os.rename("new.ts", "new.mp4")
-        # os.system("ffmpeg -i new.ts -c:v copy -c:a aac new.mp4")
         os.system('rm -f *.ts')
+        os.rename("new.mp4", "new.ts")
+        os.system(f'cat new.ts > new.mp4')
 
 
 def processingFileLine(key, file_line, download_path):
@@ -193,6 +201,8 @@ def integrityCheck(url, down):
 
         res = set(res)
         for r in res:
+            if "_" in r:
+                r = r.rsplit("_")[-1]
             del file_line[r]
 
     return file_line
@@ -210,7 +220,8 @@ def theProgressBar(download_path):
             temp = checkDownloadFolder(download_path, ".ts")
             if len(temp) >= i:
                 break
-            if time.time() - t > 10:
+            if time.time() - t > 180:
+                print("网速太慢，程序转入后台下载")
                 return
 
 
@@ -221,7 +232,15 @@ def checkDownloadFolder(download_path, ty=".ts"):
         temp += [os.path.abspath(p) for p in Path(download_path).glob(f'**/*{ty}')]
     except PermissionError:
         pass
-    return temp
+
+    def sortNum(name):
+        num = ""
+        for n in name:
+            if n.isdigit():
+                num += n
+        return int(num)
+
+    return sorted(temp, key=sortNum)
 
 
 def main(url, download_path, merge):
@@ -262,4 +281,4 @@ if __name__ == "__main__":
         download_path = os.getcwd() + "/download"
 
     while not checkDownloadFolder(download_path, ".mp4"):
-        main(url, download_path, merge)
+        main(url.replace("https", "http"), download_path, merge)
