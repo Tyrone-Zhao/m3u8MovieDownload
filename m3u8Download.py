@@ -1,179 +1,78 @@
 import os
 import sys
+import time
+import numpy
 import getopt
+import asyncio
 import platform
 import requests
-from Crypto.Cipher import AES
-from pathlib import Path
 from tqdm import tqdm
+from pathlib import Path
+from collections import OrderedDict
+from Crypto.Cipher import AES
+from multiprocessing import Process, cpu_count
+
+headers = {
+    "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36"
+}
 
 
-def download(url):
-    download_path = os.getcwd() + "/download"
-    if not os.path.exists(download_path):
-        os.mkdir(download_path)
-
-    # 新建日期文件夹, datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-    download_path = os.path.join(download_path)
-    if not os.path.exists(download_path):
-        os.mkdir(download_path)
-
-    print(f"开始下载视频，链接为:\n{url}")
-    all_content = requests.get(url).text  # 获取第一层M3U8文件内容
-    if "#EXTM3U" not in all_content:
-        raise BaseException("非M3U8的链接")
-
-    if "EXT-X-STREAM-INF" in all_content:  # 第一层
-        file_line = all_content.split("\n")
-        for line in file_line:
-            if '.m3u8' in line:
-                url = url.rsplit("/", 1)[0] + "/" + line  # 拼出第二层m3u8的URL
-                with open("breakpoint.txt", "w") as f:
-                    f.write(url)
-                all_content = requests.get(url).text
-
-    file_line = all_content.split("\n")
-
-    if not breakpointContinuingly(download_path, file_line, url):
-        unknow = True
-        key = ""
-        for index in tqdm(range(len(file_line))):  # 第二层
-            line = file_line[index]
-            if "#EXT-X-KEY" in line:  # 找解密Key
-                method_pos = line.find("METHOD")
-                comma_pos = line.find(",")
-                method = line[method_pos:comma_pos].split('=')[1]
-                print("Decode Method：", method)
-
-                uri_pos = line.find("URI")
-                quotation_mark_pos = line.rfind('"')
-                key_path = line[uri_pos:quotation_mark_pos].split('"')[1]
-
-                key_url = url.rsplit("/", 1)[0] + "/" + key_path  # 拼出key解密密钥URL
-                res = requests.get(key_url)
-                key = res.content
-                print("key：", key)
-
-            if "EXTINF" in line:  # 找ts地址并下载
-                unknow = False
-                if "http" in file_line[index + 1]:
-                    pd_url = file_line[index + 1]
-                else:
-                    pd_url = url.rsplit("/", 1)[0] + "/" + file_line[index + 1]  # 拼出ts片段的URL
-                print(pd_url)
-
-                res = requests.get(pd_url)
-                c_fule_name = file_line[index + 1].rsplit("/", 1)[-1]
-
-                if len(key):  # AES 解密
-                    cryptor = AES.new(key, AES.MODE_CBC, key)
-                    with open(os.path.join(download_path, c_fule_name + ".mp4"), 'ab') as f:
-                        f.write(cryptor.decrypt(res.content))
-                else:
-                    with open(os.path.join(download_path, c_fule_name), 'ab') as f:
-                        f.write(res.content)
-                        f.flush()
-        if unknow:
-            raise BaseException("未找到对应的下载链接")
-        else:
-            print("下载完成")
-
-        merge_file(download_path)
+def processStart(url_list):
+    tasks = []
+    loop = asyncio.get_event_loop()
+    for url in url_list:
+        if url:
+            tasks.append(asyncio.ensure_future(yourFunc(url)))
+    loop.run_until_complete(asyncio.wait(tasks))
 
 
-def breakpointContinuingly(download_path, file_line, url):
-    """ 查找.m3u8文件 """
-    temp = []
-    try:
-        temp += [os.path.abspath(p) for p in Path(download_path).glob('**/*.ts')]
-    except PermissionError:
-        pass
-
-    if temp:
-        biggest_filename = ""
-        max_num = 0
-        for t in temp:
-            filepath, tempfilename = os.path.split(t)
-            filename, extension = os.path.splitext(tempfilename)
-            num = ""
-            for f in filename:
-                if f.isdigit():
-                    num += f
-            if int(num) > max_num:
-                max_num = int(num)
-                biggest_filename = tempfilename
-
-        print(f"从文件{biggest_filename}开始断点续传。")
-
-        unknow = True
-        begin = True
-        key = ""
-        for index in tqdm(range(len(file_line))):  # 第二层
-            line = file_line[index]
-            if "#EXT-X-KEY" in line:  # 找解密Key
-                method_pos = line.find("METHOD")
-                comma_pos = line.find(",")
-                method = line[method_pos:comma_pos].split('=')[1]
-                print("Decode Method：", method)
-
-                uri_pos = line.find("URI")
-                quotation_mark_pos = line.rfind('"')
-                key_path = line[uri_pos:quotation_mark_pos].split('"')[1]
-
-                key_url = url.rsplit("/", 1)[0] + "/" + key_path  # 拼出key解密密钥URL
-                res = requests.get(key_url)
-                key = res.content
-                print("key：", key)
-
-            if "EXTINF" in line:  # 找ts地址并下载
-                if begin and biggest_filename not in file_line[index + 1]:
-                    continue
-                else:
-                    begin = False
-
-                unknow = False
-                if "http" in file_line[index + 1]:
-                    pd_url = file_line[index + 1]
-                else:
-                    pd_url = url.rsplit("/", 1)[0] + "/" + file_line[index + 1]  # 拼出ts片段的URL
-                # print(pd_url, f"    {index / len(file_line):.0%}")
-
-                res = requests.get(pd_url)
-                c_fule_name = file_line[index + 1].rsplit("/", 1)[-1]
-
-                if len(key):  # AES 解密
-                    cryptor = AES.new(key, AES.MODE_CBC, key)
-                    with open(os.path.join(download_path, c_fule_name + ".mp4"), 'ab') as f:
-                        f.write(cryptor.decrypt(res.content))
-                else:
-                    with open(os.path.join(download_path, c_fule_name), 'ab') as f:
-                        f.write(res.content)
-                        f.flush()
-        if unknow:
-            raise BaseException("未找到对应的下载链接")
-        else:
-            print("下载完成")
-
-        merge_file(download_path)
+def tasksStart(url_list):
+    # 进程池进程数量
+    cpu_num = cpu_count()
+    if len(url_list) <= cpu_num:
+        processes = []
+        for i in range(len(url_list)):
+            url = url_list[i]
+            url_list_new = [url]
+            p = Process(target=processStart, args=(url_list_new,))
+            processes.append(p)
+        for p in processes:
+            p.start()
     else:
-        return False
+        coroutine_num = len(url_list) // cpu_num
+        processes = []
+        url_list += [""] * (cpu_num * (coroutine_num + 1) - len(url_list))
+        data = numpy.array(url_list).reshape(coroutine_num + 1, cpu_num)
+        for i in range(cpu_num):
+            url_list = data[:, i]
+            p = Process(target=processStart, args=(url_list,))
+            processes.append(p)
+        for p in processes:
+            p.start()
+    return processes
 
-    return True
+
+async def yourFunc(line):
+    await downloadM3u8(line)
 
 
-def downloadWrong(url, wrong):
-    """ 重新下载某些错误的.ts文件 """
-    wrong = wrong[::-1]
-    download_path = os.getcwd() + "/download"
+def multiProcessAsync(url_list):
+    return tasksStart(url_list)
+
+
+def createDownloadFolder(download_path):
+    """ 创建下载目录 """
     if not os.path.exists(download_path):
         os.mkdir(download_path)
 
-    # 新建日期文件夹, datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-    download_path = os.path.join(download_path)
-    if not os.path.exists(download_path):
-        os.mkdir(download_path)
+    # # 新建日期文件夹
+    # download_path = os.path.join(download_path) + "/" + datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+    # if not os.path.exists(download_path):
+    #     os.mkdir(download_path)
 
-    print(f"开始下载视频，链接为:\n{url}")
+
+def getFileLine(url):
+    """ 获取file_url, 即所有m3u8文件的url地址 """
     all_content = requests.get(url).text  # 获取第一层M3U8文件内容
     if "#EXTM3U" not in all_content:
         raise BaseException("非M3U8的链接")
@@ -189,10 +88,9 @@ def downloadWrong(url, wrong):
 
     file_line = all_content.split("\n")
 
-    unknow = True
+    res = OrderedDict()
     key = ""
-    w = wrong.pop()
-    for index in tqdm(range(len(file_line))):  # 第二层
+    for index in range(len(file_line)):  # 第二层
         line = file_line[index]
         if "#EXT-X-KEY" in line:  # 找解密Key
             method_pos = line.find("METHOD")
@@ -210,36 +108,41 @@ def downloadWrong(url, wrong):
             print("key：", key)
 
         if "EXTINF" in line:  # 找ts地址并下载
-            if w not in file_line[index + 1]:
-                continue
-            else:
-                if wrong:
-                    w = wrong.pop()
-
-            unknow = False
             if "http" in file_line[index + 1]:
                 pd_url = file_line[index + 1]
             else:
                 pd_url = url.rsplit("/", 1)[0] + "/" + file_line[index + 1]  # 拼出ts片段的URL
-            # print(pd_url, f"    {index / len(file_line):.0%}")
 
-            res = requests.get(pd_url)
             c_fule_name = file_line[index + 1].rsplit("/", 1)[-1]
+            res[c_fule_name] = pd_url
 
-            if len(key):  # AES 解密
-                cryptor = AES.new(key, AES.MODE_CBC, key)
-                with open(os.path.join(download_path, c_fule_name + ".mp4"), 'ab') as f:
-                    f.write(cryptor.decrypt(res.content))
-            else:
-                with open(os.path.join(download_path, c_fule_name), 'ab') as f:
-                    f.write(res.content)
-                    f.flush()
-    if unknow:
-        raise BaseException("未找到对应的下载链接")
-    else:
-        print("下载完成")
+    return key, res
 
 
+async def downloadM3u8(line):
+    """ 根据file_line下载m3u8文件 """
+    key, download_path, c_fule_name, pd_url, *_ = line
+
+    res = requests.get(pd_url)
+
+    try:
+        if len(key):  # AES 解密
+            cryptor = AES.new(key, AES.MODE_CBC, key)
+            with open(os.path.join(download_path, c_fule_name + ".mp4"), 'ab') as f:
+                f.write(cryptor.decrypt(res.content))
+        else:
+            with open(os.path.join(download_path, c_fule_name), 'ab') as f:
+                f.write(res.content)
+                f.flush()
+    except Exception:
+        print(f"{line}下载失败")
+        os.chdir(download_path)
+        plat_f = platform.system()
+        if "Win" in plat_f:
+            os.system(f'del /Q {c_fule_name}')
+        elif "Dar" in plat_f:
+            os.system(f'rm -f {c_fule_name}')
+        print(f"{line}不完整文件已删除")
 
 
 def merge_file(path):
@@ -259,19 +162,104 @@ def merge_file(path):
         os.system('rm -f *.ts')
 
 
-if __name__ == '__main__':
-    wrong = []
-    opts, args = getopt.getopt(sys.argv[1:], "u:")
-    url = "http://jx.kqk8.com/ce707512-8b1b-4902-86e3-aaa4f8b7be6a"
-    if opts:
-        url = opts[0][1]
-    url = url.replace("https", "http")
-    if wrong:
-        downloadWrong(url, wrong)
-    else:
+def processingFileLine(key, file_line, download_path):
+    """ 把file_line变成(url, download_path, line)的元组形式list """
+    res = []
+    for f_name, f_url in file_line.items():
+        res.append((key, download_path, f_name, f_url))
+
+    return res
+
+
+def integrityCheck(url, down):
+    """ 检查是否有缺失的.ts文件，如有则重新下载 """
+    key, file_line = getFileLine(url)
+    download_path = down
+    temp = checkDownloadFolder(download_path, ".ts")
+
+    if temp:
+        max_num = 0
+        res = []
+        for t in temp:
+            filepath, tempfilename = os.path.split(t)
+            filename, extension = os.path.splitext(tempfilename)
+            num = ""
+            for f in filename:
+                if f.isdigit():
+                    num += f
+            if int(num) > max_num:
+                max_num = int(num)
+            res.append(tempfilename)
+
+        res = set(res)
+        for r in res:
+            del file_line[r]
+
+    return file_line
+
+
+def theProgressBar(download_path):
+    """ 显示进度条 """
+    key, file_line = getFileLine(url)
+    temp = checkDownloadFolder(download_path, ".ts")
+
+    res = len(file_line)
+    for i in tqdm(range(len(temp), res)):
+        t = time.time()
         while True:
-            try:
-                download(url)
+            temp = checkDownloadFolder(download_path, ".ts")
+            if len(temp) >= i:
                 break
-            except Exception:
-                continue
+            if time.time() - t > 10:
+                return
+
+
+def checkDownloadFolder(download_path, ty=".ts"):
+    """ 返回下载目录中的文件list """
+    temp = []
+    try:
+        temp += [os.path.abspath(p) for p in Path(download_path).glob(f'**/*{ty}')]
+    except PermissionError:
+        pass
+    return temp
+
+
+def main(url, download_path, merge):
+    try:
+        key, file_line = getFileLine(url)
+        createDownloadFolder(download_path)
+        if merge:
+            file_line = integrityCheck(url, download_path)
+            if file_line:
+                file_line = processingFileLine(key, file_line, download_path)
+                processes = multiProcessAsync(file_line)
+                theProgressBar(download_path)
+                for p in processes:
+                    p.join()
+            else:
+                print("开始合并文件")
+                merge_file(download_path)
+    except Exception as e:
+        raise
+
+
+if __name__ == "__main__":
+    merge = ""
+    document = ""
+    url = "https://cdn-5.haku99.com/hls/2019/05/20/UZWZ2mEs/playlist.m3u8"
+    opts, args = getopt.getopt(sys.argv[1:], "u:d:m:")
+    if opts:
+        for k, v in opts:
+            if k == "-u":
+                url = v
+            if k == "-d":
+                document = v
+            if k == "-m":
+                merge = v
+    if document:
+        download_path = document
+    else:
+        download_path = os.getcwd() + "/download"
+
+    while not checkDownloadFolder(download_path, ".mp4"):
+        main(url, download_path, merge)
