@@ -91,8 +91,6 @@ def getFileLine(url):
         for line in file_line:
             if '.m3u8' in line:
                 url = url.rsplit("/", 1)[0] + "/" + line  # 拼出第二层m3u8的URL
-                with open("breakpoint.txt", "w") as f:
-                    f.write(url)
                 all_content = requests.get(url).text
 
     file_line = all_content.split("\n")
@@ -252,6 +250,7 @@ def checkDownloadFolder(download_path, ty=".ts"):
 
 
 def main(url, download_path, merge):
+    """ 下载ts文件并自动整合，包括开启进度条 """
     try:
         key, file_line = getFileLine(url)
         createDownloadFolder(download_path)
@@ -264,7 +263,7 @@ def main(url, download_path, merge):
                 for p in processes:
                     p.join()
             else:
-                print("开始合并文件")
+                print("合并文件......")
                 merge_file(download_path)
     except Exception as e:
         raise e

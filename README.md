@@ -1,7 +1,9 @@
 # m3u8MovieDownload
-下载m3u8电影并自动整合
+下载m3u8链接电影并自动整合.ts文件
 
 # 使用
+**注意：使用前必须先删除下载目录内的mp4文件**
+
 -u -> the m3u8 url
 
 -d -> download_path
