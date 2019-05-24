@@ -9,8 +9,8 @@ import platform
 import requests
 from tqdm import tqdm
 from pathlib import Path
-from collections import OrderedDict
 from Crypto.Cipher import AES
+from collections import OrderedDict
 from multiprocessing import Process, cpu_count
 
 headers = {
@@ -72,6 +72,14 @@ def createDownloadFolder(download_path):
     #     os.mkdir(download_path)
 
 
+def testRequest(pd_url):
+    """ 测试m3u8文件是否可以正常下载 """
+    res = requests.get(pd_url)
+    if b"404 Not Found" in res.content:
+        return False
+    return True
+
+
 def getFileLine(url):
     """ 获取file_url, 即所有m3u8文件的url地址 """
     all_content = requests.get(url).text  # 获取第一层M3U8文件内容
@@ -90,8 +98,9 @@ def getFileLine(url):
     file_line = all_content.split("\n")
 
     http = r'((http|ftp|https)://(([a-zA-Z0-9\._-]+\.[a-zA-Z]{2,6})|([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})))'
-    url_head = re.findall(http, "https://v2.bajiebofang.com/ppvod/8071A2CEA071459EDD41F82F1317DB04.m3u8")[0][0]
-    res = OrderedDict()
+    url_head = re.findall(http, url)[0][0]
+    begin, flag = True, 0
+    res_ = OrderedDict()
     key = ""
     for index in range(len(file_line)):  # 第二层
         line = file_line[index]
@@ -114,12 +123,22 @@ def getFileLine(url):
             if "http" in file_line[index + 1]:
                 pd_url = file_line[index + 1]
             else:
-                pd_url = url_head + "/" + file_line[index + 1]  # 拼出ts片段的URL
+                pd_url1 = url.rsplit("/", 1)[0] + "/" + file_line[index + 1]  # 拼出ts片段的URL
+                pd_url2 = url_head + "/" + file_line[index + 1]  # 拼出ts片段的URL
+
+                if begin and testRequest(pd_url1):
+                    flag = 1
+                    begin = False
+                elif begin and testRequest(pd_url2):
+                    flag = 2
+                    begin = False
+
+                pd_url = pd_url1 if flag == 1 else pd_url2
 
             c_fule_name = file_line[index + 1].rsplit("/", 1)[-1]
-            res[c_fule_name] = pd_url
+            res_[c_fule_name] = pd_url
 
-    return key, res
+    return key, res_
 
 
 async def downloadM3u8(line):
@@ -127,24 +146,15 @@ async def downloadM3u8(line):
     key, download_path, c_fule_name, pd_url, *_ = line
 
     res = requests.get(pd_url)
+    if len(key):  # AES 解密
 
-    try:
-        if len(key):  # AES 解密
+        with open(os.path.join(download_path, c_fule_name), 'ab') as f:
             cryptor = AES.new(key, AES.MODE_CBC, key)
-            with open(os.path.join(download_path, c_fule_name + ".mp4"), 'ab') as f:
-                f.write(cryptor.decrypt(res.content))
-        else:
-            with open(os.path.join(download_path, c_fule_name), 'ab') as f:
-                f.write(res.content)
-    except Exception:
-        print(f"{line}下载失败")
-        os.chdir(download_path)
-        plat_f = platform.system()
-        if "Win" in plat_f:
-            os.system(f'del /Q {c_fule_name}')
-        elif "Dar" in plat_f:
-            os.system(f'rm -f {c_fule_name}')
-        print(f"{line}不完整文件已删除")
+            text = cryptor.decrypt(res.content)
+            f.write(text)
+    else:
+        with open(os.path.join(download_path, c_fule_name), 'ab') as f:
+            f.write(res.content)
 
 
 def merge_file(path):
@@ -179,10 +189,8 @@ def processingFileLine(key, file_line, download_path):
     return res
 
 
-def integrityCheck(url, down):
+def integrityCheck(download_path, file_line):
     """ 检查是否有缺失的.ts文件，如有则重新下载 """
-    key, file_line = getFileLine(url)
-    download_path = down
     temp = checkDownloadFolder(download_path, ".ts")
 
     if temp:
@@ -191,7 +199,7 @@ def integrityCheck(url, down):
         for t in temp:
             filepath, tempfilename = os.path.split(t)
             filename, extension = os.path.splitext(tempfilename)
-            num = ""
+            num = "0"
             for f in filename:
                 if f.isdigit():
                     num += f
@@ -203,14 +211,14 @@ def integrityCheck(url, down):
         for r in res:
             if "_" in r:
                 r = r.rsplit("_")[-1]
-            del file_line[r]
+            if file_line.get(r):
+                del file_line[r]
 
     return file_line
 
 
-def theProgressBar(download_path):
+def theProgressBar(file_line, download_path):
     """ 显示进度条 """
-    key, file_line = getFileLine(url)
     temp = checkDownloadFolder(download_path, ".ts")
 
     res = len(file_line)
@@ -234,7 +242,7 @@ def checkDownloadFolder(download_path, ty=".ts"):
         pass
 
     def sortNum(name):
-        num = ""
+        num = "0"
         for n in name:
             if n.isdigit():
                 num += n
@@ -248,18 +256,18 @@ def main(url, download_path, merge):
         key, file_line = getFileLine(url)
         createDownloadFolder(download_path)
         if merge:
-            file_line = integrityCheck(url, download_path)
+            new_file_line = integrityCheck(download_path, file_line)
             if file_line:
-                file_line = processingFileLine(key, file_line, download_path)
-                processes = multiProcessAsync(file_line)
-                theProgressBar(download_path)
+                process_file_line = processingFileLine(key, new_file_line, download_path)
+                processes = multiProcessAsync(process_file_line)
+                theProgressBar(file_line, download_path)
                 for p in processes:
                     p.join()
             else:
                 print("开始合并文件")
                 merge_file(download_path)
     except Exception as e:
-        raise
+        raise e
 
 
 if __name__ == "__main__":
