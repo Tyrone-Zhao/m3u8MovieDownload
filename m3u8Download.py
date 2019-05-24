@@ -145,7 +145,6 @@ async def downloadM3u8(line):
 
     res = requests.get(pd_url)
     if len(key):  # AES 解密
-
         with open(os.path.join(download_path, c_fule_name), 'ab') as f:
             cryptor = AES.new(key, AES.MODE_CBC, key)
             text = cryptor.decrypt(res.content)
@@ -272,7 +271,7 @@ def main(url, download_path, merge):
 if __name__ == "__main__":
     merge = ""
     document = ""
-    url = "https://cdn-5.haku99.com/hls/2019/05/20/UZWZ2mEs/playlist.m3u8"
+    url = ""
     opts, args = getopt.getopt(sys.argv[1:], "u:d:m:")
     if opts:
         for k, v in opts:
@@ -287,5 +286,10 @@ if __name__ == "__main__":
     else:
         download_path = os.getcwd() + "/download"
 
-    while not checkDownloadFolder(download_path, ".mp4"):
-        main(url.replace("https", "http"), download_path, merge)
+    if not url:
+        print("请输入下载地址")
+    else:
+        url = url.split("url=")[-1]
+
+        while not checkDownloadFolder(download_path, ".mp4"):
+            main(url.replace("https", "http"), download_path, merge)
