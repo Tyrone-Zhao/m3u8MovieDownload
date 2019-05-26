@@ -86,17 +86,17 @@ def getFileLine(url):
     if "#EXTM3U" not in all_content:
         raise BaseException("非M3U8的链接")
 
+    http = r'((http|ftp|https)://(([a-zA-Z0-9\._-]+\.[a-zA-Z]{2,6})|([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})))'
+    url_head = re.findall(http, url)[0][0]
+
     if "EXT-X-STREAM-INF" in all_content:  # 第一层
         file_line = all_content.split("\n")
         for line in file_line:
             if '.m3u8' in line:
-                url = url.rsplit("/", 1)[0] + "/" + line  # 拼出第二层m3u8的URL
+                url = url_head + line  # 拼出第二层m3u8的URL
                 all_content = requests.get(url).text
 
     file_line = all_content.split("\n")
-
-    http = r'((http|ftp|https)://(([a-zA-Z0-9\._-]+\.[a-zA-Z]{2,6})|([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})))'
-    url_head = re.findall(http, url)[0][0]
     begin, flag = True, 0
     res_ = OrderedDict()
     key = ""
