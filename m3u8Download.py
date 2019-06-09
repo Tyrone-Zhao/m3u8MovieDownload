@@ -144,14 +144,21 @@ async def downloadM3u8(line):
     key, download_path, c_fule_name, pd_url, *_ = line
 
     res = requests.get(pd_url)
-    if len(key):  # AES 解密
-        with open(os.path.join(download_path, c_fule_name), 'ab') as f:
-            cryptor = AES.new(key, AES.MODE_CBC, key)
-            text = cryptor.decrypt(res.content)
-            f.write(text)
-    else:
-        with open(os.path.join(download_path, c_fule_name), 'ab') as f:
-            f.write(res.content)
+    res.encoding = "utf-8"
+    try:
+        if len(key):  # AES 解密
+            with open(os.path.join(download_path, c_fule_name), 'ab') as f:
+                cryptor = AES.new(key, AES.MODE_CBC, key)
+                text = cryptor.decrypt(res.content)
+                f.write(text)
+        else:
+            with open(os.path.join(download_path, c_fule_name), 'ab') as f:
+                f.write(res.content)
+    except ValueError:
+        # with open(os.path.join(download_path, "error.txt"), 'ab') as f:
+        #     f.write(res.content)
+        #     f.write("\n")
+        pass
 
 
 def merge_file(path):
@@ -255,7 +262,7 @@ def main(url, download_path, merge):
         createDownloadFolder(download_path)
         if merge:
             new_file_line = integrityCheck(download_path, file_line)
-            if file_line:
+            if new_file_line:
                 process_file_line = processingFileLine(key, new_file_line, download_path)
                 processes = multiProcessAsync(process_file_line)
                 theProgressBar(len_file_line, download_path)

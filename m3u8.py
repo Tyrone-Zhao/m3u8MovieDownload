@@ -10,6 +10,7 @@ from pathlib import Path
 from Crypto.Cipher import AES
 from datetime import timedelta
 from collections import OrderedDict
+from multiprocessing import Pool, cpu_count
 from tornado import httpclient, gen, ioloop, queues
 
 
@@ -137,11 +138,11 @@ def integrityCheck(download_path, file_line):
     return file_line
 
 
-def processingFileLine(key, file_line, download_path):
+def processingFileLine(file_line, download_path):
     """ 把file_line变成(url, download_path, line)的元组形式list """
     res = []
     for f_name, f_url in file_line.items():
-        res.append((key, download_path, f_name, f_url))
+        res.append((download_path, f_name, f_url))
 
     return res
 
@@ -159,6 +160,24 @@ def theProgressBar(len_file_line, download_path):
             if time.time() - t > 180:
                 print("网速太慢，程序转入后台下载")
                 return
+
+
+def runMulti(thing):
+    key, file, download_path = thing
+    with open(os.path.join(download_path, file), 'rb') as f:
+        cryptor = AES.new(key, AES.MODE_CBC, key)
+        text = cryptor.decrypt(f.read())
+    with open(os.path.join(download_path, file), 'wb') as f:
+        f.write(text)
+
+
+def decrptAES(key, file_line, download_path):
+    cpu_num = cpu_count()
+    p = Pool(cpu_num)
+    things = [(key, file[0], download_path) for file in file_line]
+    p.map(runMulti, things)
+    p.close()
+    p.join()
 
 
 def merge_file(path):
@@ -282,24 +301,19 @@ class MySpider(AsySpider):
             url, headers=headers
         )
 
-    def handle_html(self, key, download_path, c_fule_name, pd_url, content):
+    def handle_html(self, download_path, c_fule_name, pd_url, content):
         """handle html page"""
-        if len(key):  # AES 解密
-            with open(os.path.join(download_path, c_fule_name), 'ab') as f:
-                cryptor = AES.new(key, AES.MODE_CBC, key)
-                text = cryptor.decrypt(content)
-                f.write(text)
-        else:
-            with open(os.path.join(download_path, c_fule_name), 'ab') as f:
-                f.write(content)
+        with open(os.path.join(download_path, c_fule_name), 'ab') as f:
+            f.write(content)
 
 
     def handle_response(self, url, response):
         """inherit and rewrite this method if necessary"""
-        key, download_path, c_fule_name, pd_url, *_ = url
+        download_path, c_fule_name, pd_url, *_ = url
+        response.encoding = "utf-8"
 
         if response.code == 200:
-            self.handle_html(key, download_path, c_fule_name, pd_url, response.body)
+            self.handle_html(download_path, c_fule_name, pd_url, response.body)
 
         elif response.code == 599:  # retry
             self._fetching.remove(url)
@@ -307,7 +321,7 @@ class MySpider(AsySpider):
 
     @gen.coroutine
     def get_page(self, url):
-        key, download_path, c_fule_name, pd_url, *_ = url
+        download_path, c_fule_name, pd_url, *_ = url
 
         while True:
             try:
@@ -325,18 +339,20 @@ def main(url, download_path, merge):
         createDownloadFolder(download_path)
         if merge:
             new_file_line = integrityCheck(download_path, file_line)
-            if file_line:
-                process_file_line = processingFileLine(key, new_file_line, download_path)
+            if new_file_line:
+                process_file_line = processingFileLine(new_file_line, download_path)
                 s = MySpider(process_file_line)
                 import threading
                 p1 = threading.Thread(target=theProgressBar, args=(len_file_line, download_path))
                 p1.start()
                 s.run()
             else:
+                if len(key):  # AES 解密
+                    decrptAES(key, file_line, download_path)
                 print("合并文件......")
                 merge_file(download_path)
     except Exception as e:
-        pass
+        raise e
 
 
 if __name__ == '__main__':
