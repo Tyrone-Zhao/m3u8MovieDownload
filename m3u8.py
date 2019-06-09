@@ -146,12 +146,11 @@ def processingFileLine(key, file_line, download_path):
     return res
 
 
-def theProgressBar(file_line, download_path):
+def theProgressBar(len_file_line, download_path):
     """ 显示进度条 """
     temp = checkDownloadFolder(download_path, ".ts")
 
-    res = len(file_line)
-    for i in tqdm(range(len(temp), res)):
+    for i in tqdm(range(len(temp), len_file_line)):
         t = time.time()
         while True:
             temp = checkDownloadFolder(download_path, ".ts")
@@ -309,11 +308,12 @@ class MySpider(AsySpider):
     @gen.coroutine
     def get_page(self, url):
         key, download_path, c_fule_name, pd_url, *_ = url
+
         while True:
             try:
                 response = yield self.fetch(pd_url)
                 break
-            except Exception:
+            except Exception as e:
                 continue
         raise gen.Return(response)
 
@@ -321,6 +321,7 @@ class MySpider(AsySpider):
 def main(url, download_path, merge):
     try:
         key, file_line = getFileLine(url)
+        len_file_line = len(file_line)
         createDownloadFolder(download_path)
         if merge:
             new_file_line = integrityCheck(download_path, file_line)
@@ -328,14 +329,14 @@ def main(url, download_path, merge):
                 process_file_line = processingFileLine(key, new_file_line, download_path)
                 s = MySpider(process_file_line)
                 import threading
-                p1 = threading.Thread(target=theProgressBar, args=(file_line, download_path))
+                p1 = threading.Thread(target=theProgressBar, args=(len_file_line, download_path))
                 p1.start()
                 s.run()
             else:
                 print("合并文件......")
                 merge_file(download_path)
     except Exception as e:
-        raise e
+        pass
 
 
 if __name__ == '__main__':

@@ -214,12 +214,11 @@ def integrityCheck(download_path, file_line):
     return file_line
 
 
-def theProgressBar(file_line, download_path):
+def theProgressBar(len_file_line, download_path):
     """ 显示进度条 """
     temp = checkDownloadFolder(download_path, ".ts")
 
-    res = len(file_line)
-    for i in tqdm(range(len(temp), res)):
+    for i in tqdm(range(len(temp), len_file_line)):
         t = time.time()
         while True:
             temp = checkDownloadFolder(download_path, ".ts")
@@ -252,13 +251,14 @@ def main(url, download_path, merge):
     """ 下载ts文件并自动整合，包括开启进度条 """
     try:
         key, file_line = getFileLine(url)
+        len_file_line = len(file_line)
         createDownloadFolder(download_path)
         if merge:
             new_file_line = integrityCheck(download_path, file_line)
             if file_line:
                 process_file_line = processingFileLine(key, new_file_line, download_path)
                 processes = multiProcessAsync(process_file_line)
-                theProgressBar(file_line, download_path)
+                theProgressBar(len_file_line, download_path)
                 for p in processes:
                     p.join()
             else:
