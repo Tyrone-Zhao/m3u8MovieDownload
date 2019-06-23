@@ -226,14 +226,10 @@ def theProgressBar(len_file_line, download_path):
     temp = checkDownloadFolder(download_path, ".ts")
 
     for i in tqdm(range(len(temp), len_file_line)):
-        t = time.time()
         while True:
             temp = checkDownloadFolder(download_path, ".ts")
             if len(temp) >= i:
                 break
-            if time.time() - t > 180:
-                print("网速太慢，程序转入后台下载")
-                return
 
 
 def checkDownloadFolder(download_path, ty=".ts"):
@@ -254,7 +250,7 @@ def checkDownloadFolder(download_path, ty=".ts"):
     return sorted(temp, key=sortNum)
 
 
-def main(url, download_path, merge):
+def main(url, download_path, merge, begin):
     """ 下载ts文件并自动整合，包括开启进度条 """
     try:
         key, file_line = getFileLine(url)
@@ -265,11 +261,10 @@ def main(url, download_path, merge):
             if new_file_line:
                 process_file_line = processingFileLine(key, new_file_line, download_path)
                 processes = multiProcessAsync(process_file_line)
-                theProgressBar(len_file_line, download_path)
-                for p in processes:
-                    p.join()
+                if begin == 1:
+                    theProgressBar(len_file_line, download_path)
             else:
-                print("合并文件......")
+                print("下载完成，合并文件......")
                 merge_file(download_path)
     except Exception as e:
         raise e
@@ -297,6 +292,8 @@ if __name__ == "__main__":
         print("请输入下载地址")
     else:
         url = url.split("url=")[-1]
+        begin = 1
 
         while not checkDownloadFolder(download_path, ".mp4"):
-            main(url.replace("https", "http"), download_path, merge)
+            main(url.replace("https", "http"), download_path, merge, begin)
+            begin += 1

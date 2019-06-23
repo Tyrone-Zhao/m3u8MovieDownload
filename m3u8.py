@@ -152,14 +152,10 @@ def theProgressBar(len_file_line, download_path):
     temp = checkDownloadFolder(download_path, ".ts")
 
     for i in tqdm(range(len(temp), len_file_line)):
-        t = time.time()
         while True:
             temp = checkDownloadFolder(download_path, ".ts")
             if len(temp) >= i:
                 break
-            if time.time() - t > 180:
-                print("网速太慢，程序转入后台下载")
-                return
 
 
 def runMulti(thing):
