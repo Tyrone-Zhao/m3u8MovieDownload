@@ -256,35 +256,35 @@ def main(url, download_path, merge, begin):
         key, file_line = getFileLine(url)
         len_file_line = len(file_line)
         createDownloadFolder(download_path)
-        if merge:
-            new_file_line = integrityCheck(download_path, file_line)
-            if new_file_line:
-                process_file_line = processingFileLine(key, new_file_line, download_path)
-                processes = multiProcessAsync(process_file_line)
-                if begin == 1:
-                    import threading
-                    p1 = threading.Thread(target=theProgressBar, args=(len_file_line, download_path))
-                    p1.start()
 
-                # 解决因网速问题重新开始下载导致的进度条问题
-                temp = checkDownloadFolder(download_path, ".ts")
-                flag = True
+        new_file_line = integrityCheck(download_path, file_line)
+        if new_file_line:
+            process_file_line = processingFileLine(key, new_file_line, download_path)
+            processes = multiProcessAsync(process_file_line)
+            if begin == 1:
+                import threading
+                p1 = threading.Thread(target=theProgressBar, args=(len_file_line, download_path))
+                p1.start()
 
-                for i in range(len(temp), len_file_line):
-                    if not flag:
+            # 解决因网速问题重新开始下载导致的进度条问题
+            temp = checkDownloadFolder(download_path, ".ts")
+            flag = True
+
+            for i in range(len(temp), len_file_line):
+                if not flag:
+                    break
+                t = time.time()
+                while flag:
+                    temp = checkDownloadFolder(download_path, ".ts")
+                    if len(temp) >= i:
                         break
-                    t = time.time()
-                    while flag:
-                        temp = checkDownloadFolder(download_path, ".ts")
-                        if len(temp) >= i:
-                            break
-                        if time.time() - t > 20:
-                            for p in processes:
-                                p.close()
-                            flag = False
-            else:
-                print("下载完成，合并文件......")
-                merge_file(download_path)
+                    if time.time() - t > 20:
+                        for p in processes:
+                            p.close()
+                        flag = False
+        elif merge:
+            print("下载完成，合并文件......")
+            merge_file(download_path)
     except Exception as e:
         raise e
 
