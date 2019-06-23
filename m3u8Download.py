@@ -262,7 +262,26 @@ def main(url, download_path, merge, begin):
                 process_file_line = processingFileLine(key, new_file_line, download_path)
                 processes = multiProcessAsync(process_file_line)
                 if begin == 1:
-                    theProgressBar(len_file_line, download_path)
+                    import threading
+                    p1 = threading.Thread(target=theProgressBar, args=(len_file_line, download_path))
+                    p1.start()
+
+                # 解决因网速问题重新开始下载导致的进度条问题
+                temp = checkDownloadFolder(download_path, ".ts")
+                flag = True
+
+                for i in range(len(temp), len_file_line):
+                    if not flag:
+                        break
+                    t = time.time()
+                    while flag:
+                        temp = checkDownloadFolder(download_path, ".ts")
+                        if len(temp) >= i:
+                            break
+                        if time.time() - t > 20:
+                            for p in processes:
+                                p.close()
+                            flag = False
             else:
                 print("下载完成，合并文件......")
                 merge_file(download_path)
@@ -292,8 +311,9 @@ if __name__ == "__main__":
         print("请输入下载地址")
     else:
         url = url.split("url=")[-1]
+        print(f"开始下载，m3u8文件地址为：{url}")
         begin = 1
 
         while not checkDownloadFolder(download_path, ".mp4"):
-            main(url.replace("https", "http"), download_path, merge, begin)
+            main(url, download_path, merge, begin)  # .replace("https", "http")
             begin += 1

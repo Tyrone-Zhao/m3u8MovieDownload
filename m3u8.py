@@ -328,7 +328,7 @@ class MySpider(AsySpider):
         raise gen.Return(response)
 
 
-def main(url, download_path, merge):
+def main(url, download_path, merge, begin):
     try:
         key, file_line = getFileLine(url)
         len_file_line = len(file_line)
@@ -338,15 +338,32 @@ def main(url, download_path, merge):
             if new_file_line:
                 process_file_line = processingFileLine(new_file_line, download_path)
                 s = MySpider(process_file_line)
-                import threading
-                p1 = threading.Thread(target=theProgressBar, args=(len_file_line, download_path))
-                p1.start()
+                if begin == 1:
+                    import threading
+                    p1 = threading.Thread(target=theProgressBar, args=(len_file_line, download_path))
+                    p1.start()
                 s.run()
+
+                # 解决因网速问题重新开始下载导致的进度条问题
+                temp = checkDownloadFolder(download_path, ".ts")
+                flag = True
+
+                for i in range(len(temp), len_file_line):
+                    if not flag:
+                        break
+                    t = time.time()
+                    while flag:
+                        temp = checkDownloadFolder(download_path, ".ts")
+                        if len(temp) >= i:
+                            break
+                        if time.time() - t > 20:
+                            flag = False
             else:
                 if len(key):  # AES 解密
                     decrptAES(key, file_line, download_path)
                 print("合并文件......")
                 merge_file(download_path)
+
     except Exception as e:
         raise e
 
@@ -373,6 +390,9 @@ if __name__ == '__main__':
         print("请输入下载地址")
     else:
         url = url.split("url=")[-1]
+        print(f"开始下载，m3u8文件地址为：{url}")
+        begin = 1
 
         while not checkDownloadFolder(download_path, ".mp4"):
-            main(url.replace("https", "http"), download_path, merge)
+            main(url, download_path, merge, begin)  # .replace("https", "http")
+            begin += 1

@@ -12,10 +12,13 @@
 
 ## 推荐使用:
 ```sh
-$ python3 m3u8Download.py -d /Users/zhaojunyu/Downloads/ -m 1 -u https://cdn-5.haku99.com/hls/2019/05/20/UZWZ2mEs/playlist.m3u8
+$ python3 m3u8.py -d /Users/zhaojunyu/Downloads/ -m 1 -u https://cdn-5.haku99.com/hls/2019/05/20/UZWZ2mEs/playlist.m3u8
 ```
 
 ## 备用:
 ```sh
-$ python3 m3u8.py -d /Users/zhaojunyu/Downloads/ -m 1 -u https://cdn-5.haku99.com/hls/2019/05/20/UZWZ2mEs/playlist.m3u8
+$ python3 m3u8Download.py -d /Users/zhaojunyu/Downloads/ -m 1 -u https://cdn-5.haku99.com/hls/2019/05/20/UZWZ2mEs/playlist.m3u8
 ```
+
+## 更新记录
+v1.0 大幅提升电影下载速度, 支持续传
