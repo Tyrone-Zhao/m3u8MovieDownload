@@ -46,8 +46,14 @@ def getFileLine(url):
     if "#EXTM3U" not in all_content:
         raise BaseException("非M3U8的链接")
 
-    http = r'((http|ftp|https)://(([a-zA-Z0-9\._-]+\.[a-zA-Z]{2,6})|([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})))'
-    url_head = re.findall(http, url)[0][0]
+    temp_index = url.find("?")
+    temp_url = url[:temp_index]
+    if temp_index < 0:
+        http = r'((http|ftp|https)://(([a-zA-Z0-9\._-]+\.[a-zA-Z]{2,6})|([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})))'
+        url_head = re.findall(http, url)[0][0]
+    else:
+        temp_index = temp_url.rfind("/")
+        url_head = url[:temp_index+1]
 
     if "EXT-X-STREAM-INF" in all_content:  # 第一层
         file_line = all_content.split("\n")
@@ -112,6 +118,7 @@ def createDownloadFolder(download_path):
 
 def integrityCheck(download_path, file_line):
     """ 检查是否有缺失的.ts文件，如有则重新下载 """
+    import copy
     temp = checkDownloadFolder(download_path, ".ts")
 
     if temp:
@@ -126,14 +133,18 @@ def integrityCheck(download_path, file_line):
                     num += f
             if int(num) > max_num:
                 max_num = int(num)
-            res.append(tempfilename)
+            if len(tempfilename) < 10:
+                res.append(t)
+            else:
+                res.append(tempfilename)
 
         res = set(res)
         for r in res:
             if "_" in r:
                 r = r.rsplit("_")[-1]
-            if file_line.get(r):
-                del file_line[r]
+            for f in copy.deepcopy(file_line):
+                if r in f:
+                    del file_line[f]
 
     return file_line
 
@@ -299,6 +310,9 @@ class MySpider(AsySpider):
 
     def handle_html(self, download_path, c_fule_name, pd_url, content):
         """handle html page"""
+        temp_index = c_fule_name.find("?")
+        if temp_index > 0:
+            c_fule_name = c_fule_name[:temp_index]
         with open(os.path.join(download_path, c_fule_name), 'ab') as f:
             f.write(content)
 
